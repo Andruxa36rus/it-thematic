@@ -61,9 +61,23 @@ def create_object(id, line, point=False):
         return response
 
 
+def fill_inf_obj_additional_info(line):
+    """ Наполняет additional_info в Информационном объекте """
+    additional_info_dict = {
+        'id2gis': line[vars.INPUT_ID],
+    }
+    for item in line:
+        if item in vars.INPUT_SOC_LIST:
+            """ Если название столбца == Социальным сетям """
+            if not line[item] == '':
+                """ И его значение не пустое? Пишем! """
+                additional_info_dict[item] = line[item]
+    additional_info_dict = json.dumps(additional_info_dict)
+    return additional_info_dict
+
+
 def fill_inf_obj(line, point):
-    additional_info_dict = {'id2gis': line[vars.INPUT_ID]}
-    additional_info = json.dumps(additional_info_dict)
+    additional_info = fill_inf_obj_additional_info(line)
     param_dict = {
         vars.PROVIDER_NAME: line[vars.INPUT_NAME],
         vars.PROVIDER_EMAIL: line[vars.INPUT_EMAIL],
@@ -92,6 +106,7 @@ def fill_org(line):
     }
     """ Проверка на наличие в csv необязательных параметров (в данном случае только URL) """
     if line[vars.INPUT_SITE]:
+        """ Комментирование условия ниже позволяет проверить работоспособность логирования 400 ошибки """
         if vars.INPUT_SITE[0:7] != 'https://' or vars.INPUT_SITE[0:6] != 'http://':
             param_dict[vars.PROVIDER_URL] = 'https://' + line[vars.INPUT_SITE]
         else:
@@ -146,12 +161,12 @@ def responses_result(name, *responses):
                 answer_dict = json.loads(response.text)
                 """ 
                 Так как ошибка может быть по нескольким полям,
-                Получаем ключи и перебераем по ним ошибку 
+                Получаем ключи и перебераем по ним ошибки 
                 """
                 answer_keys = answer_dict.keys()
                 string = ''
                 for key in answer_keys:
-                    """ Собираем строку и возвращаем ее для будущего лога """
+                    """ Собираем строку и пишем в лог """
                     string += key + ' - ' + answer_dict[key][0] + ' '
                 logger.info(name + '...' + string)
                 return False
@@ -163,6 +178,7 @@ def responses_result(name, *responses):
                 Поэтому ищем индекс слова ОШИБКА 
                 и срезаем всю его строку
                 """
+                print(response.status_code)
                 str = response.text
                 index_start = str.find('ОШИБКА')
                 index_end = str.find('\n', index_start)
