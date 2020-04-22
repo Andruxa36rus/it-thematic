@@ -60,6 +60,3 @@ INPUT_SOC_DICT = {
     'instagram': 'Соц. сети Insagram',
     'youtube': 'Соц. сети youtube',
 }
-
-""" VARS """
-log_row_counter = 1
