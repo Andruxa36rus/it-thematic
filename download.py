@@ -25,6 +25,12 @@ def get_num(length):
     return int(number)
 
 
+def get_key(d, value):
+    for k, v in d.items():
+        if v == value:
+            return k
+
+
 def create_object(id, line, point=False):
     """
     Функция определяет какой объект нужно создать
@@ -65,13 +71,15 @@ def fill_inf_obj_additional_info(line):
     """ Наполняет additional_info в Информационном объекте """
     additional_info_dict = {
         'id2gis': line[vars.INPUT_ID],
+        'social': {}
     }
     for item in line:
-        if item in vars.INPUT_SOC_LIST:
+        if item in vars.INPUT_SOC_DICT.values():
             """ Если название столбца == Социальным сетям """
+            key = get_key(vars.INPUT_SOC_DICT, item)
             if not line[item] == '':
                 """ И его значение не пустое? Пишем! """
-                additional_info_dict[item] = line[item]
+                additional_info_dict['social'][key] = line[item]
     additional_info_dict = json.dumps(additional_info_dict)
     return additional_info_dict
 

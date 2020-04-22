@@ -54,20 +54,12 @@ INPUT_ADDRESS = 'Адрес'
 INPUT_GEOM = 'geometry'
 
 INPUT_SOC_DICT = {
-    'INPUT_SOC_VK': 'Соц. сети VK',
-    'INPUT_SOC_OK': 'Соц. сети одноклассники',
-    'INPUT_SOC_FB': 'Соц. сети Facebook',
-    'INPUT_SOC_INST': 'Соц. сети Insagram',
-    'INPUT_SOC_YT': 'Соц. сети youtube',
+    'vk': 'Соц. сети VK',
+    'ok': 'Соц. сети одноклассники',
+    'facebook': 'Соц. сети Facebook',
+    'instagram': 'Соц. сети Insagram',
+    'youtube': 'Соц. сети youtube',
 }
-
-INPUT_SOC_LIST = [
-    'Соц. сети VK',
-    'Соц. сети одноклассники',
-    'Соц. сети Facebook',
-    'Соц. сети Insagram',
-    'Соц. сети youtube',
-]
 
 """ VARS """
 log_row_counter = 1
