@@ -77,7 +77,7 @@ def fill_inf_obj_additional_info(line):
         if item in vars.INPUT_SOC_DICT.values():
             """ Если название столбца == Социальным сетям """
             key = get_key(vars.INPUT_SOC_DICT, item)
-            if not line[item] == '':
+            if not line[item]:
                 """ И его значение не пустое? Пишем! """
                 additional_info_dict['social'][key] = line[item]
     additional_info_dict = json.dumps(additional_info_dict)
@@ -217,13 +217,24 @@ if __name__ == "__main__":
         reader = csv.DictReader(f_obj, delimiter=';')
         """ Построчная работа со словарём """
         for line in reader:
+
+            """ 
+            В дальнейшем, в обоих случаях создается Информационный объект типа PROCUREMENT_POINT (point=True) 
+            Поэтому создаем его на развилке
+            """
+            inf_obj_point_response, current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
+            if current_inf_obj_point in None:
+                """ 
+                Если current_inf_obj_point == None, (id текущего Информационного объекта типа Пункт заготовки"
+                значит объект не был создан. Ошибку в лог. Продолжение бессмысленно
+                """
+                responses_result(line[vars.INPUT_NAME], inf_obj_point_response)
+                continue
+
             """ Если id родителя уже читался """
             if line[vars.INPUT_PARENT_ID] in id_dict:
                 """ Для Заготовителя, id которого содержится в словаре """
                 current_org = id_dict[line[vars.INPUT_PARENT_ID]]['org_id']
-
-                """ Создается Информационный объект типа PROCUREMENT_POINT (point=True) """
-                inf_obj_point_response, current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
 
                 """ Создается наследуемый Пункт заготовки """
                 point_response, current_point = create_object(vars.PROVIDER_POINT_ID, line)
@@ -238,9 +249,15 @@ if __name__ == "__main__":
             else:
                 """ Создание информационного объекта типа ORGANIZATION """
                 inf_obj_org_response, current_inf_obj_org = create_object(vars.PROVIDER_INF_OBJ_ID, line)
-
-                """ Создание информационного объекта типа PROCUREMENT_POINT """
-                inf_obj_point_response, current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
+                if current_inf_obj_org in None:
+                    """ 
+                    Если current_inf_obj_org == None, (id текущего Информационного объекта типа Заготовитель"
+                    значит объект не был создан. Нужно удалить созданный перед условием ИО типа Пункт заготовки
+                    Ошибку в лог. Продолжение бессмысленно
+                    """
+                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_point))
+                    responses_result(line[vars.INPUT_NAME], inf_obj_point_response)
+                    continue
 
                 """ Создание Заготовителя """
                 org_response, current_org = create_object(vars.PROVIDER_ORG_ID, line)
@@ -256,34 +273,22 @@ if __name__ == "__main__":
                 """ Результат - строка, которая запишется в лог """
                 result = responses_result(line[vars.INPUT_NAME], inf_obj_org_response, inf_obj_point_response, org_response,
                                           point_response, phone_response)
-                if result:
-                    """ 
-                    Так как этот id родителя встречается впервые,
-                    и введенные данные - валидны, 
-                    то следует добавить их в словарь идентификаторов
-                    
-                    ID Информационного объекта, от которого наследуются
-                    Заготовитель и Пункты заготовки, 
-                    хранится в словаре словарей, имеющим структуру:
-                    { 
-                        int(id родителя): # Числовой id родителя из csv
-                            { 
-                                # id Заготовителя
-                                'org_id': int(current_inf_obj_org),
-                                # id Информационного объекта типа Пункт заготовки
-                                'inf_obj_point_id': int(current_inf_obj_point) 
-                            }
-                    }
-                    """
-                    id_dict[line[vars.INPUT_PARENT_ID]] = {
-                        'org_id': current_org,
-                        'inf_obj_point_id': current_inf_obj_point
-                    }
 
-                else:
-                    """ 
-                    Если result хотя бы по одному объекту возвращает error, 
-                    тогда удаляются все раннее созданные объекты
-                    """
-                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_point))
-                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_org))
+                """ 
+                ID Информационного объекта, от которого наследуются
+                Заготовитель и Пункты заготовки, 
+                хранится в словаре словарей, имеющим структуру:
+                { 
+                    int(id родителя): # Числовой id родителя из csv
+                        { 
+                            # id Заготовителя
+                            'org_id': int(current_inf_obj_org),
+                            # id Информационного объекта типа Пункт заготовки
+                            'inf_obj_point_id': int(current_inf_obj_point) 
+                        }
+                }
+                """
+                id_dict[line[vars.INPUT_PARENT_ID]] = {
+                    'org_id': current_org,
+                    'inf_obj_point_id': current_inf_obj_point
+                }
