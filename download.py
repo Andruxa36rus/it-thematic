@@ -223,7 +223,7 @@ if __name__ == "__main__":
             Поэтому создаем его на развилке
             """
             inf_obj_point_response, current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
-            if current_inf_obj_point in None:
+            if current_inf_obj_point is None:
                 """ 
                 Если current_inf_obj_point == None, (id текущего Информационного объекта типа Пункт заготовки"
                 значит объект не был создан. Ошибку в лог. Продолжение бессмысленно
@@ -249,7 +249,7 @@ if __name__ == "__main__":
             else:
                 """ Создание информационного объекта типа ORGANIZATION """
                 inf_obj_org_response, current_inf_obj_org = create_object(vars.PROVIDER_INF_OBJ_ID, line)
-                if current_inf_obj_org in None:
+                if current_inf_obj_org is None:
                     """ 
                     Если current_inf_obj_org == None, (id текущего Информационного объекта типа Заготовитель"
                     значит объект не был создан. Нужно удалить созданный перед условием ИО типа Пункт заготовки
