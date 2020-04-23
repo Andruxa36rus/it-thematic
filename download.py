@@ -41,27 +41,27 @@ def create_object(id, line, point=False):
     В итоге выполнения вложенной функции request()
     возвращает id типом либо int либо None
     """
+    param_dict = {}
     new_obj_id = None
+
     if id == vars.PROVIDER_INF_OBJ_ID:
         """ Если передан id провайдера 'Информационный объект' - наполняем """
         param_dict = fill_inf_obj(line, point)
-        """ POST запрос на создание объекта """
-        new_obj_id = request(id, param_dict, line[vars.INPUT_NAME])
 
     elif id == vars.PROVIDER_ORG_ID:
         """ Если передан id провайдера 'Заготовитель' """
         param_dict = fill_org(line)
-        new_obj_id = request(id, param_dict, line[vars.INPUT_NAME])
 
     elif id == vars.PROVIDER_POINT_ID:
         """ Если передан id провайдера 'Пункт заготовки' """
         param_dict = fill_point(line)
-        new_obj_id = request(id, param_dict, line[vars.INPUT_NAME])
 
     elif id == vars.PROVIDER_PHONE_ID:
         """ Если передан id провайдера 'Телефон' """
         param_dict = fill_phone(line)
-        new_obj_id = request(id, param_dict, line[vars.INPUT_NAME])
+
+    """ POST запрос на создание объекта, там же осуществляется обработка ошибки """
+    new_obj_id = request(id, param_dict, line)
 
     return new_obj_id
 
@@ -69,14 +69,13 @@ def create_object(id, line, point=False):
 def fill_inf_obj_additional_info(line):
     """ Наполняет additional_info в Информационном объекте """
     additional_info_dict = {
-        'id2gis': line[vars.INPUT_ID],
-        'social': {}
+        'id2gis': line[vars.INPUT_ID]
     }
     for item in line:
         if item in vars.INPUT_SOC_DICT.values():
             """ Если название столбца == Социальным сетям """
             key = get_key(vars.INPUT_SOC_DICT, item)
-            if line[item] == '':
+            if not line[item] == '':
                 """ И его значение не пустое? Пишем! """
                 additional_info_dict.setdefault('social', {})[key] = line[item]
     additional_info_dict = json.dumps(additional_info_dict)
@@ -113,7 +112,6 @@ def fill_org(line):
     }
     """ Проверка на наличие в csv необязательных параметров (в данном случае только URL) """
     if line[vars.INPUT_SITE]:
-        """ Комментирование условия ниже позволяет проверить работоспособность логирования 400 ошибки """
         if vars.INPUT_SITE[0:7] != 'https://' or vars.INPUT_SITE[0:6] != 'http://':
             param_dict[vars.PROVIDER_ORG_URL] = 'https://' + line[vars.INPUT_SITE]
         else:
@@ -140,14 +138,14 @@ def fill_phone(line):
     return param_dict
 
 
-def request(id, param_dict, name):
+def request(id, param_dict, line):
     """ Возвращает id нового объекта, либо - ошибку в лог и None """
     response = requests.post(vars.FEATURES_URL % id, data=param_dict)
     if 400 <= response.status_code <= 499:
-        logging.error(name + ' ' + response.text)
+        logging.error(line[vars.INPUT_NAME] + ' ' + response.text + ' | ' + str(line))
         return None
     elif 500 <= response.status_code <= 599:
-        logging.critical(name + ' ' + response.text)
+        logging.critical(line[vars.INPUT_NAME] + ' ' + response.text + ' | ' + str(line))
         return None
     answer = response.json()
     new_obj_id = answer['id']
@@ -162,53 +160,23 @@ if __name__ == "__main__":
         reader = csv.DictReader(f_obj, delimiter=';')
         """ Построчная работа со словарём """
         for line in reader:
-            """ 
-            В дальнейшем, в обоих случаях создается Информационный объект типа PROCUREMENT_POINT (point=True) 
-            Поэтому создаем его на развилке
-            """
-            current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
-            if current_inf_obj_point is None:
-                """ 
-                Если current_inf_obj_point == None, (id текущего Информационного объекта типа Пункт заготовки"
-                значит объект не был создан. Ошибку в лог. Продолжение бессмысленно
-                """
-                continue
-
-            """ Если id родителя уже читался """
-            if line[vars.INPUT_PARENT_ID] in id_dict:
-                """ Для Заготовителя, id которого содержится в словаре """
-                current_org = id_dict[line[vars.INPUT_PARENT_ID]]['org_id']
-
-                """ Создается наследуемый Пункт заготовки """
-                current_point = create_object(vars.PROVIDER_POINT_ID, line)
-
-                """ Если None значит была ошибка, и она уже в логе. Остается лишь удалить созданный на развилке ИО """
-                if current_point is None:
-                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_point))
-                else:
-                    logging.info(line[vars.INPUT_NAME] + '...OK')
-
-            else:
+            """ Если id родителя ранее не читался """
+            if line[vars.INPUT_PARENT_ID] not in id_dict:
                 """ Создание информационного объекта типа ORGANIZATION """
                 current_inf_obj_org = create_object(vars.PROVIDER_INF_OBJ_ID, line)
                 if current_inf_obj_org is None:
                     """ 
-                    Если current_inf_obj_org == None, (id текущего Информационного объекта типа Заготовитель"
-                    значит объект не был создан. Нужно удалить созданный перед условием ИО типа Пункт заготовки
-                    Ошибку в лог. Продолжение бессмысленно
+                    Если current_inf_obj_org == None, (id текущего Информационного объекта типа Заготовитель)
+                    значит объект не был создан. Ошибка уже в логе. Продолжение бессмысленно
                     """
-                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_point))
                     continue
 
                 """ Создание Заготовителя """
                 current_org = create_object(vars.PROVIDER_ORG_ID, line)
-
-                """ Создание Пункта заготовки """
-                current_point = create_object(vars.PROVIDER_POINT_ID, line)
-
-                """ Добавление телефона, если имеется """
-                if line[vars.INPUT_PHONE]:
-                    phone = create_object(vars.PROVIDER_PHONE_ID, line)
+                if current_org is None:
+                    """ Если создании Организации завершилось с ошибкой, то ее ИО нам тоже не пригодится. Выходим """
+                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_org))
+                    continue
 
                 """ 
                 ID Информационного объекта, от которого наследуются
@@ -218,15 +186,43 @@ if __name__ == "__main__":
                     int(id родителя): # Числовой id родителя из csv
                         { 
                             # id Заготовителя
-                            'org_id': int(current_inf_obj_org),
+                            'org_id': int(current_org),
                             # id Информационного объекта типа Пункт заготовки
                             'inf_obj_point_id': int(current_inf_obj_point) 
                         }
                 }
                 """
                 id_dict[line[vars.INPUT_PARENT_ID]] = {
-                    'org_id': current_org,
-                    'inf_obj_point_id': current_inf_obj_point
+                    'org_id': current_org
                 }
 
-                logging.info(line[vars.INPUT_NAME] + '...OK')
+            """ 
+            Для создания Информационного объекта типа PROCUREMENT_POINT (point=True) 
+            нужно знать id Организации. Берем из словаря и создаем
+            """
+            current_org = id_dict[line[vars.INPUT_PARENT_ID]]['org_id']
+
+            current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
+            if current_inf_obj_point is None:
+                """ 
+                Если current_inf_obj_point == None, (id текущего Информационного объекта типа Пункт заготовки"
+                значит объект не был создан. Ошибка уже в логе. Продолжение бессмысленно
+                """
+                continue
+
+            """ Сразу запишем id только что созданного Информационного объекта типа Пункт заготовки """
+            id_dict[line[vars.INPUT_PARENT_ID]]['inf_obj_point_id'] = current_inf_obj_point
+
+            """ Создается наследуемый Пункт заготовки """
+            current_point = create_object(vars.PROVIDER_POINT_ID, line)
+
+            """ Если None - значит была ошибка, и она уже в логе. Значит только что созданный ИО нам не нужен. Выход """
+            if current_point is None:
+                requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_point))
+                continue
+
+            """ Добавление телефона, если имеется """
+            if line[vars.INPUT_PHONE]:
+                phone = create_object(vars.PROVIDER_PHONE_ID, line)
+
+            logging.info(line[vars.INPUT_NAME] + '...OK')
