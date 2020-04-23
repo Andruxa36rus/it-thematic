@@ -76,9 +76,9 @@ def fill_inf_obj_additional_info(line):
         if item in vars.INPUT_SOC_DICT.values():
             """ Если название столбца == Социальным сетям """
             key = get_key(vars.INPUT_SOC_DICT, item)
-            if not line[item]:
+            if line[item] == '':
                 """ И его значение не пустое? Пишем! """
-                additional_info_dict['social'][key] = line[item]
+                additional_info_dict.setdefault('social', {})[key] = line[item]
     additional_info_dict = json.dumps(additional_info_dict)
     return additional_info_dict
 
@@ -86,56 +86,56 @@ def fill_inf_obj_additional_info(line):
 def fill_inf_obj(line, point):
     additional_info = fill_inf_obj_additional_info(line)
     param_dict = {
-        vars.PROVIDER_NAME: line[vars.INPUT_NAME],
-        vars.PROVIDER_EMAIL: line[vars.INPUT_EMAIL],
-        vars.PROVIDER_ADDRESS: line[vars.INPUT_ADDRESS],
-        vars.PROVIDER_GEOM: line[vars.INPUT_GEOM],
-        vars.PROVIDER_ADDITIONAL_INFO: additional_info
+        vars.PROVIDER_INF_OBJ_NAME: line[vars.INPUT_NAME],
+        vars.PROVIDER_INF_OBJ_EMAIL: line[vars.INPUT_EMAIL],
+        vars.PROVIDER_INF_OBJ_ADDRESS: line[vars.INPUT_ADDRESS],
+        vars.PROVIDER_INF_OBJ_GEOM: line[vars.INPUT_GEOM],
+        vars.PROVIDER_INF_OBJ_ADDITIONAL_INFO: additional_info
     }
     """ 
     Если передан point=True, значит это ИО типа Пункт заготовки.
     По умолчанию type_of_object=ORGANIZATION (при point=Flase)
     """
     if point:
-        param_dict[vars.PROVIDER_TYPE_OF_OBJECT] = vars.PROCUREMENT_POINT
+        param_dict[vars.PROVIDER_INF_OBJ_TYPE] = vars.PROCUREMENT_POINT
     return param_dict
 
 
 def fill_org(line):
     param_dict = {
-        vars.PROVIDER_INF_OBJ: current_inf_obj_org,
-        vars.PROVIDER_FULL_NAME: line[vars.INPUT_NAME],
-        vars.PROVIDER_ADDRESS_OF_ORGANIZATION: line[vars.INPUT_ADDRESS],
-        vars.PROVIDER_TYPE_OF_ORGANIZATION: 'ORG',
-        vars.PROVIDER_OGRN: get_num(13),
-        vars.PROVIDER_INN: get_num(10),
-        vars.PROVIDER_ANNUAL_REVENUE: get_num(1)
+        vars.PROVIDER_RELATED_INF_OBJ: current_inf_obj_org,
+        vars.PROVIDER_ORG_FULL_NAME: line[vars.INPUT_NAME],
+        vars.PROVIDER_ORG_ADDRESS: line[vars.INPUT_ADDRESS],
+        vars.PROVIDER_ORG_TYPE: 'ORG',
+        vars.PROVIDER_ORG_OGRN: get_num(13),
+        vars.PROVIDER_ORG_INN: get_num(10),
+        vars.PROVIDER_ORG_ANNUAL_REVENUE: get_num(1)
     }
     """ Проверка на наличие в csv необязательных параметров (в данном случае только URL) """
     if line[vars.INPUT_SITE]:
         """ Комментирование условия ниже позволяет проверить работоспособность логирования 400 ошибки """
         if vars.INPUT_SITE[0:7] != 'https://' or vars.INPUT_SITE[0:6] != 'http://':
-            param_dict[vars.PROVIDER_URL] = 'https://' + line[vars.INPUT_SITE]
+            param_dict[vars.PROVIDER_ORG_URL] = 'https://' + line[vars.INPUT_SITE]
         else:
-            param_dict[vars.PROVIDER_URL] = line[vars.INPUT_SITE]
+            param_dict[vars.PROVIDER_ORG_URL] = line[vars.INPUT_SITE]
     return param_dict
 
 
 def fill_point(line):
     param_dict = {
-        vars.PROVIDER_INF_OBJ: current_inf_obj_point,
-        vars.PROVIDER_ORGANIZATION: current_org,
-        vars.PROVIDER_ANNUAL_VOLUME: get_num(1),
-        vars.PROVIDER_STATUS: 'LEGAL'
+        vars.PROVIDER_RELATED_INF_OBJ: current_inf_obj_point,
+        vars.PROVIDER_POINT_ORGANIZATION: current_org,
+        vars.PROVIDER_POINT_ANNUAL_VOLUME: get_num(1),
+        vars.PROVIDER_POINT_STATUS: 'LEGAL'
     }
     return param_dict
 
 
 def fill_phone(line):
     param_dict = {
-        vars.PROVIDER_INF_OBJ: current_inf_obj_point,
-        vars.PROVIDER_TYPE_OF_PHONE: 'ACCOUNTING',
-        vars.PROVIDER_VALUE: line[vars.INPUT_PHONE]
+        vars.PROVIDER_RELATED_INF_OBJ: current_inf_obj_point,
+        vars.PROVIDER_PHONE_TYPE: 'ACCOUNTING',
+        vars.PROVIDER_PHONE_VALUE: line[vars.INPUT_PHONE]
     }
     return param_dict
 
@@ -143,45 +143,16 @@ def fill_phone(line):
 def request(id, param_dict, name):
     """ Возвращает id нового объекта, либо - ошибку в лог и None """
     response = requests.post(vars.FEATURES_URL % id, data=param_dict)
-    if response.status_code != 201:
-        """ Во избежания дальнейших ошибок, возвращаем new_obj_id = None """
-        error_log(name, response)
+    if 400 <= response.status_code <= 499:
+        logging.error(name + ' ' + response.text)
+        return None
+    elif 500 <= response.status_code <= 599:
+        logging.critical(name + ' ' + response.text)
         return None
     answer = response.json()
     new_obj_id = answer['id']
     return new_obj_id
 
-
-def error_log(name, response):
-    """
-    Функция принимает ответ ошибки и обрабатывает его
-    """
-    try:
-        """ Четырехсотые ответы без труда будут преобразованы в словарь """
-        answer_dict = json.loads(response.text)
-        answer_keys = answer_dict.keys()
-        string = ''
-        for key in answer_keys:
-            """ Собираем строку и пишем в лог """
-            string += key + ' - ' + answer_dict[key][0] + ' '
-        logging.info(name + '...' + string)
-        return False
-
-    except:
-        """ 
-        А вот 500+ ответы приходят строкой, 
-        с преобразованием которой возникают сложности.
-        Поэтому ищем индекс слова ОШИБКА 
-        и срезаем всю его строку
-        """
-        print(response.status_code)
-        str = response.text
-        index_start = str.find('ОШИБКА')
-        index_end = str.find('\n', index_start)
-        string = str[index_start:index_end]
-        logging.error(name + '...' + string)
-        logging.debug(name + '\n' + response.text)
-        return False
 
 if __name__ == "__main__":
     """ Словарь прочитанных 'id родителя' """
