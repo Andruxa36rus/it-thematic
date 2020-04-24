@@ -9,15 +9,10 @@ FEATURES_URL = PROVIDER_URL+'features/'
 DELETE_URL = FEATURES_URL+'purge/'
 
 """ PROVIDERS INFO """
-# INFORMATION_OBJECT = 'ikpz_informationobject'
-# ORGANIZATION = 'ikpz_organization'
-# TELEPHONE = 'ikpz_telephone'
-PROCUREMENT_POINT = 'PROCUREMENT_POINT'
-
-PROVIDER_INF_OBJ_ID = 4
-PROVIDER_ORG_ID = 5
-PROVIDER_POINT_ID = 6
-PROVIDER_PHONE_ID = 10
+INFORMATION_OBJECT = 'ikpz_informationobject'
+ORGANIZATION = 'ikpz_organization'
+TELEPHONE = 'ikpz_telephone'
+PROCUREMENT_POINT = 'ikpz_procurementpoint'
 
 PROVIDER_INF_OBJ_NAME = 'name'
 PROVIDER_INF_OBJ_EMAIL = 'email'
