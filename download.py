@@ -33,7 +33,7 @@ def get_key(d, value):
             return k
 
 
-def create_object(id, line, point=False):
+def create_object(id, line, id_dict, point=False):
     """
     Функция определяет какой объект нужно создать
     из списка провайдеров и создает его.
@@ -46,19 +46,19 @@ def create_object(id, line, point=False):
 
     if id == vars.PROVIDER_INF_OBJ_ID:
         """ Если передан id провайдера 'Информационный объект' - наполняем """
-        param_dict = fill_inf_obj(line, point)
+        param_dict = fill_inf_obj(line, point, id_dict)
 
     elif id == vars.PROVIDER_ORG_ID:
         """ Если передан id провайдера 'Заготовитель' """
-        param_dict = fill_org(line)
+        param_dict = fill_org(line, id_dict['inf_obj_org_id'])
 
     elif id == vars.PROVIDER_POINT_ID:
         """ Если передан id провайдера 'Пункт заготовки' """
-        param_dict = fill_point(line)
+        param_dict = fill_point(line, id_dict['inf_obj_point_id'], id_dict['org_id'])
 
     elif id == vars.PROVIDER_PHONE_ID:
         """ Если передан id провайдера 'Телефон' """
-        param_dict = fill_phone(line)
+        param_dict = fill_phone(line, id_dict['inf_obj_point_id'])
 
     """ POST запрос на создание объекта, там же осуществляется обработка ошибки """
     new_obj_id = request(id, param_dict, line)
@@ -82,7 +82,7 @@ def fill_inf_obj_additional_info(line):
     return additional_info_dict
 
 
-def fill_inf_obj(line, point):
+def fill_inf_obj(line, point, id_dict):
     additional_info = fill_inf_obj_additional_info(line)
     param_dict = {
         vars.PROVIDER_INF_OBJ_NAME: line[vars.INPUT_NAME],
@@ -100,7 +100,7 @@ def fill_inf_obj(line, point):
     return param_dict
 
 
-def fill_org(line):
+def fill_org(line, current_inf_obj_org):
     param_dict = {
         vars.PROVIDER_RELATED_INF_OBJ: current_inf_obj_org,
         vars.PROVIDER_ORG_FULL_NAME: line[vars.INPUT_NAME],
@@ -119,7 +119,7 @@ def fill_org(line):
     return param_dict
 
 
-def fill_point(line):
+def fill_point(line, current_inf_obj_point, current_org):
     param_dict = {
         vars.PROVIDER_RELATED_INF_OBJ: current_inf_obj_point,
         vars.PROVIDER_POINT_ORGANIZATION: current_org,
@@ -129,7 +129,7 @@ def fill_point(line):
     return param_dict
 
 
-def fill_phone(line):
+def fill_phone(line, current_inf_obj_point):
     param_dict = {
         vars.PROVIDER_RELATED_INF_OBJ: current_inf_obj_point,
         vars.PROVIDER_PHONE_TYPE: 'ACCOUNTING',
@@ -152,7 +152,7 @@ def request(id, param_dict, line):
     return new_obj_id
 
 
-if __name__ == "__main__":
+def main():
     """ Словарь прочитанных 'id родителя' """
     id_dict = {}
     """ Открытие файла как словарь """
@@ -163,19 +163,12 @@ if __name__ == "__main__":
             """ Если id родителя ранее не читался """
             if line[vars.INPUT_PARENT_ID] not in id_dict:
                 """ Создание информационного объекта типа ORGANIZATION """
-                current_inf_obj_org = create_object(vars.PROVIDER_INF_OBJ_ID, line)
+                current_inf_obj_org = create_object(vars.PROVIDER_INF_OBJ_ID, line, id_dict)
                 if current_inf_obj_org is None:
                     """ 
                     Если current_inf_obj_org == None, (id текущего Информационного объекта типа Заготовитель)
                     значит объект не был создан. Ошибка уже в логе. Продолжение бессмысленно
                     """
-                    continue
-
-                """ Создание Заготовителя """
-                current_org = create_object(vars.PROVIDER_ORG_ID, line)
-                if current_org is None:
-                    """ Если создании Организации завершилось с ошибкой, то ее ИО нам тоже не пригодится. Выходим """
-                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_org))
                     continue
 
                 """ 
@@ -185,36 +178,51 @@ if __name__ == "__main__":
                 { 
                     int(id родителя): # Числовой id родителя из csv
                         { 
+                            # id Информационный Объект типа Организация
+                            'inf_obj_org_id': current_inf_obj_org,
+                            
                             # id Заготовителя
                             'org_id': int(current_org),
+                            
                             # id Информационного объекта типа Пункт заготовки
                             'inf_obj_point_id': int(current_inf_obj_point) 
                         }
                 }
+                На данном этапе для создания связанной Организации требуется id ИО Организация
+                Сохраняем в словарь, и передаем этот id в функцию создания Организации
                 """
                 id_dict[line[vars.INPUT_PARENT_ID]] = {
-                    'org_id': current_org
+                    'inf_obj_org_id': current_inf_obj_org
                 }
 
-            """ 
-            Для создания Информационного объекта типа PROCUREMENT_POINT (point=True) 
-            нужно знать id Организации. Берем из словаря и создаем
-            """
-            current_org = id_dict[line[vars.INPUT_PARENT_ID]]['org_id']
+                """ Создание Заготовителя """
+                current_org = create_object(vars.PROVIDER_ORG_ID, line, id_dict[line[vars.INPUT_PARENT_ID]])
+                if current_org is None:
+                    """ Если создании Организации завершилось с ошибкой, то ее ИО нам тоже не пригодится. Выходим """
+                    requests.delete(vars.FEATURES_URL % vars.PROVIDER_INF_OBJ_ID + str(current_inf_obj_org))
+                    continue
 
-            current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line, point=True)
+                """ id только что созданной организации нужно записать в словарь  """
+                id_dict[line[vars.INPUT_PARENT_ID]]['org_id'] = current_org
+
+            """ Для создание Информационного объекта типа PROCUREMENT_POINT (point=True) """
+            current_inf_obj_point = create_object(vars.PROVIDER_INF_OBJ_ID, line,
+                                                  id_dict[line[vars.INPUT_PARENT_ID]], point=True)
             if current_inf_obj_point is None:
                 """ 
-                Если current_inf_obj_point == None, (id текущего Информационного объекта типа Пункт заготовки"
+                Если current_inf_obj_point == None, (id текущего Информационного объекта типа Пункт заготовки)
                 значит объект не был создан. Ошибка уже в логе. Продолжение бессмысленно
                 """
                 continue
 
-            """ Сразу запишем id только что созданного Информационного объекта типа Пункт заготовки """
+            """ 
+            Запись id только что созданного Информационного объекта типа Пункт заготовки 
+            для создания наследуемого от него Пункта заготовки
+            """
             id_dict[line[vars.INPUT_PARENT_ID]]['inf_obj_point_id'] = current_inf_obj_point
 
             """ Создается наследуемый Пункт заготовки """
-            current_point = create_object(vars.PROVIDER_POINT_ID, line)
+            current_point = create_object(vars.PROVIDER_POINT_ID, line, id_dict[line[vars.INPUT_PARENT_ID]])
 
             """ Если None - значит была ошибка, и она уже в логе. Значит только что созданный ИО нам не нужен. Выход """
             if current_point is None:
@@ -223,6 +231,10 @@ if __name__ == "__main__":
 
             """ Добавление телефона, если имеется """
             if line[vars.INPUT_PHONE]:
-                phone = create_object(vars.PROVIDER_PHONE_ID, line)
+                phone = create_object(vars.PROVIDER_PHONE_ID, line, id_dict[line[vars.INPUT_PARENT_ID]])
 
             logging.info(line[vars.INPUT_NAME] + '...OK')
+
+
+if __name__ == "__main__":
+    main()
