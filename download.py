@@ -21,16 +21,13 @@ def get_provider_id(provider):
 def get_num(length):
     """ Заполняем строку нужное количество раз случайным числом и возвращаем int """
     number = ''
-    if length == 1:
-        """ Если заказ на одно число, то оно не 0 """
-        number = random.randint(1, 9)
-    else:
-        for i in range(0, length):
-            if i == 0:
-                """ Первое число не нулевое """
-                number += str(random.randint(1, 9))
-            else:
-                number += str(random.randint(0, 9))
+    for i in range(0, length):
+        if i == 0:
+            """ Первое число не нулевое """
+            number += str(random.randint(1, 9))
+        else:
+            number += str(random.randint(0, 9))
+    print(number)
     return int(number)
 
 
